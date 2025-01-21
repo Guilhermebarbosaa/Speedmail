@@ -1,0 +1,159 @@
+Sub EnviarEmails()
+    Dim OutApp As Object
+    Dim OutMail As Object
+    Dim Anexo As String
+    Dim Anexo2 As String
+    Dim Anexo3 As String
+    Dim Destinatario As String
+    Dim CCEmails As String
+    Dim Assunto As String
+    Dim Corpo As String
+    Dim ws As Worksheet
+    Dim i As Integer
+    Dim LastRow As Integer
+    Dim HeaderC As String
+    Dim HeaderD As String
+    Dim Links As String
+    Dim UniqueEmails As Collection
+    Dim Email As Variant
+    Dim Saudacao As String
+    Dim Nome As String
+    Dim Signature As String
+    Dim NomeContato As String
+    Dim NomeEmpresa As String
+    '-----------------------------------------------------------------
+    Dim Parte1 As String
+    Dim Parte2 As String
+    Dim Parte3 As String
+    '-----------------------------------------------------------------
+    On Error GoTo ErrorHandler
+    
+    Set ws = ThisWorkbook.Sheets("Emails")
+    HeaderC = ws.Range("E4").Value
+    HeaderD = ws.Range("F4").Value
+  
+    Links = GetLinks(ws)
+    If Links <> "" Then
+        Corpo = HeaderC & "<br><br>Para conhecer um pouco mais sobre nossas soluções, acesse:<br>" & Links
+    Else
+        Corpo = HeaderC & "<br>"
+    End If
+    
+    Saudacao = ws.Range("L2").Value
+    Nome = ws.Range("J3").Value
+    
+    Set OutApp = CreateObject("Outlook.Application")
+    LastRow = ws.Cells(ws.Rows.Count, "D").End(xlUp).Row
+    Set UniqueEmails = GetUniqueEmails(ws, LastRow)
+    CCEmails = GetCCEmails(ws)
+    Signature = GetOutlookSignature()
+    
+
+    For Each Email In UniqueEmails
+        Destinatario = Email
+        Assunto = HeaderD
+        NomeContato = ws.Range("C" & Application.Match(Destinatario, ws.Range("D:D"), 0)).Value
+        NomeEmpresa = ws.Range("B" & Application.Match(Destinatario, ws.Range("D:D"), 0)).Value
+    '----------------------------------------------------
+    Parte1 = "<br><br>Tudo bem?<br><br>Meu nome é " & Nome & ", trabalho na Siemens do Brasil na área de automação industrial. Estou responsável pela prospecção de novos parceiros e verificamos que a " & NomeEmpresa & " atua em um segmento-alvo para nossa companhia.<br>"
+    Parte3 = Corpo & Signature
+    '-----------------------------------------------------
+        Set OutMail = OutApp.CreateItem(0)
+        With OutMail
+            .To = Destinatario
+            .CC = CCEmails
+            .Subject = Assunto & NomeEmpresa
+            
+            .HTMLBody = Saudacao & " " & NomeContato & "!" & Parte1 & Parte3
+            
+            ' Anexos
+            Anexo = ws.Range("J6").Value
+            If Anexo <> "" Then .Attachments.Add Anexo
+            Anexo2 = ws.Range("J7").Value
+            If Anexo2 <> "" Then .Attachments.Add Anexo2
+            Anexo3 = ws.Range("J8").Value
+            If Anexo3 <> "" Then .Attachments.Add Anexo3
+            
+            .Display
+        End With
+        Set OutMail = Nothing
+    Next Email
+    
+    Set OutApp = Nothing
+    Exit Sub
+    
+ErrorHandler:
+    MsgBox "Ocorreu um erro: " & Err.Description, vbCritical, "Erro"
+End Sub
+
+Function GetLinks(ws As Worksheet) As String
+    Dim Links As String
+    Links = ""
+    If ws.Range("J10").Value <> "" Then Links = Links & "<a href='" & ws.Range("J10").Value & "'>" & ws.Range("J10").Value & "</a><br>"
+    If ws.Range("J11").Value <> "" Then Links = Links & "<a href='" & ws.Range("J11").Value & "'>" & ws.Range("J11").Value & "</a><br>"
+    If ws.Range("J12").Value <> "" Then Links = Links & "<a href='" & ws.Range("J12").Value & "'>" & ws.Range("J12").Value & "</a><br>"
+    GetLinks = Links
+End Function
+
+Function GetUniqueEmails(ws As Worksheet, LastRow As Integer) As Collection
+    Dim UniqueEmails As New Collection
+    Dim i As Integer
+    On Error Resume Next
+    For i = 4 To LastRow
+        If ws.Range("D" & i).Value <> "" Then
+            UniqueEmails.Add ws.Range("D" & i).Value, CStr(ws.Range("D" & i).Value)
+        End If
+    Next i
+    On Error GoTo 0
+    Set GetUniqueEmails = UniqueEmails
+End Function
+
+Function GetCCEmails(ws As Worksheet) As String
+    Dim CCEmails As String
+    Dim i As Integer
+    CCEmails = ""
+    For i = 4 To 16
+        If ws.Range("G" & i).Value <> "" Then
+            If CCEmails = "" Then
+                CCEmails = ws.Range("G" & i).Value
+            Else
+                CCEmails = CCEmails & "; " & ws.Range("G" & i).Value
+            End If
+        End If
+    Next i
+    GetCCEmails = CCEmails
+End Function
+
+Function GetOutlookSignature() As String
+    Dim SignaturePath As String
+    Dim SignatureName As String
+    Dim SignatureHtml As String
+    Dim Stream As Object
+    Dim SignatureFolder As String
+    
+    SignaturePath = Environ("AppData") & "\Microsoft\Signatures\"
+    If Dir(SignaturePath, vbDirectory) <> "" Then
+        SignatureName = Dir(SignaturePath & "*.htm")
+        If SignatureName <> "" Then
+            Set Stream = CreateObject("ADODB.Stream")
+            Stream.Type = 2
+            Stream.Mode = 3
+            Stream.Charset = "UTF-8"
+            Stream.Open
+            Stream.LoadFromFile SignaturePath & SignatureName
+            SignatureHtml = Stream.ReadText
+            Stream.Close
+            Set Stream = Nothing
+            SignatureFolder = Replace(SignatureName, ".htm", "_files")
+            If Dir(SignaturePath & SignatureFolder, vbDirectory) <> "" Then
+                SignatureHtml = Replace(SignatureHtml, "src=""", "src=""" & SignaturePath & SignatureFolder & "\")
+            End If
+            GetOutlookSignature = SignatureHtml
+        Else
+            GetOutlookSignature = ""
+        End If
+    Else
+        GetOutlookSignature = ""
+    End If
+End Function
+
